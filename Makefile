@@ -5,29 +5,41 @@
 # The name of the program to build.
 TARGET := targetname
 
+## Disk image Section: change these variables based on your bootloader
+# -----------------------------------------------------------------------------
+#
+
+## Bootloader Section: change these variables based on your bootloader
+# -----------------------------------------------------------------------------
+# The bootloader executable.
+BOOTLOADER := bootloader
+# The bootloader flags.
+BOOTLOADER_FLAGS :=
+
+
+## Architecture Section: change these variables based on your architecture
+# -----------------------------------------------------------------------------
+# The architecture to build for.
+ARCH := i686
+# The toolchain path
+# TOOLCHAIN_PATH=/usr/bin/
+# The toolchain prefix
+TOOLCHAIN_PREFIX := i686-elf
+# The architecture flags.
+ARCH_FLAGS := -march=$(ARCH) -mabi=elf
+
 ## Compiler Section: change these variables based on your compiler
 # -----------------------------------------------------------------------------
 # The compiler executable.
-CC := gcc
+CC := $(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-gcc
 # The compiler flags.
 CFLAGS := -Wall -Werror -Wpedantic -std=gnu99
 # The linker executable.
-LD := gcc
+LD := $(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-gcc
 # The linker flags.
 LDFLAGS := -Wall -Werror -Wpedantic -std=gnu99
 # The shell executable.
 SHELL := /bin/bash
-
-## Testing Suite Section: change these variables based on your testing suite
-# -----------------------------------------------------------------------------
-# The memory checker executable.
-MEMCHECK := valgrind
-# The memory checker flags.
-MEMCHECK_FLAGS := --leak-check=full --show-leak-kinds=all --track-origins=yes
-# The debugger executable.
-DEBUGGER := gdb
-# The debugger flags.
-DEBUGGER_FLAGS :=
 
 # The name of the test input file
 TEST_INPUT := test_input.txt
@@ -57,15 +69,17 @@ INCS := -I$(INC_DIR)
 SRCS := $(wildcard $(SRC_DIR)/*.c)
 # object files to link
 OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
-# name of executable file to build
+#
 BINS := $(BUILD_DIR)$(TARGET)
-# name of binary file to build
-TARGET_BIN := $(BINS).bin
+#
+TARGET_ELF := $(BINS).elf
+#
+IMG_FILE := $(BUILD_DIR)$(TARGET).img
 
 ## Command Section: change these variables based on your commands
 # -----------------------------------------------------------------------------
 # Targets
-.PHONY: all $(TARGET) dirs test clean debug help
+.PHONY: all $(TARGET) dirs clean img elf help
 
 # Default target: build the program
 all: $(BINS)
@@ -84,15 +98,6 @@ $(TARGET_BIN): $(OBJS)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) $(INCS) -c $< -o $@
 
-# Test target: build and test the program against sample input
-test: $(TARGET)
-	$(TARGET_BIN) -c -f $(TEST_OUTPUT) $(TEST_INPUT)
-
-# @echo "Testing $(BINS)..."
-# @echo "Testing memory leaks..."
-# $(MEMCHECK) $(MEMCHECK_FLAGS) $(BINS)
-# @echo "Comparing output to $(REF_EXE):"
-# diff <($(BINS)) <($(REF_EXE))
 
 # Directory target: create the build and object directories
 dirs:
@@ -101,13 +106,25 @@ dirs:
 
 # Clean target: remove build artifacts and non-essential files
 clean:
+	@echo "Cleaning $(TARGET)..."
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 	rm -rf $(BUILD_DIR)
 
-# Debug target: use a debugger to debug the program
-debug: $(TARGET_BIN)
-	@echo "Debugging $(TARGET)..."
-	$(DEBUGGER) $(DEBUGGER_FLAGS) $(TARGET_BIN)
+# Create a kernel image
+elf:
+	$(CC) $(CFLAGS) $(INCS) -o $(TARGET_ELF) $(OBJS)
+
+# Create an disk image
+img:
+  # Create a zeroed out disk image file
+	dd if=/dev/zero of=$(IMG_FILE) bs=512 count=32768
+  # Add a Master Boot Record (MBR) to the image
+	dd parted $(IMG_FILE) mklabel msdos
+  # Add a FAT32 partition to the image
+	parted $(IMG_FILE) mkpart primary fat 2048s 30720s
+  # Set the partition boot flag
+	parted $(IMG_FILE) set 1 boot on
+  # Identify the next two free loopback block devices
 
 # Help target: display usage information
 help:
