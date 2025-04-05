@@ -34,6 +34,7 @@ format() {
     return 1
   fi
 }
+
 # Main script logic
 case "$1" in
   format)

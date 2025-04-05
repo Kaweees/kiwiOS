@@ -3,11 +3,7 @@
 
 ## Program Section: change these variables based on your program
 # The name of the program to build.
-TARGET := targetname
-
-## Disk image Section: change these variables based on your bootloader
-# -----------------------------------------------------------------------------
-#
+TARGET := kiwios
 
 ## Bootloader Section: change these variables based on your bootloader
 # -----------------------------------------------------------------------------
@@ -16,17 +12,16 @@ BOOTLOADER := bootloader
 # The bootloader flags.
 BOOTLOADER_FLAGS :=
 
-
 ## Architecture Section: change these variables based on your architecture
 # -----------------------------------------------------------------------------
 # The architecture to build for.
-ARCH := i686
+ARCH := x86_64
 # The toolchain path
 # TOOLCHAIN_PATH=/usr/bin/
 # The toolchain prefix
-TOOLCHAIN_PREFIX := i686-elf
+TOOLCHAIN_PREFIX := x86_64-elf
 # The architecture flags.
-ARCH_FLAGS := -march=$(ARCH) -mabi=elf
+ARCH_FLAGS :=
 
 ## Compiler Section: change these variables based on your compiler
 # -----------------------------------------------------------------------------
@@ -61,7 +56,7 @@ INC_DIR := $(TOP_DIR)/include
 # directory to locate object files
 OBJ_DIR := $(TOP_DIR)/obj
 # directory to place build artifacts
-BUILD_DIR := $(TOP_DIR)/target/release/
+BUILD_DIR := $(TOP_DIR)/target/$(ARCH)/release/
 
 # header files to preprocess
 INCS := -I$(INC_DIR)
@@ -76,10 +71,17 @@ TARGET_ELF := $(BINS).elf
 #
 IMG_FILE := $(BUILD_DIR)$(TARGET).img
 
+## QEMU Section: change these variables based on your QEMU
+# -----------------------------------------------------------------------------
+# The QEMU executable.
+QEMU := qemu-system-$(ARCH)
+# The QEMU flags.
+QEMU_FLAGS := -drive format=raw,file=$(IMG_FILE)
+
 ## Command Section: change these variables based on your commands
 # -----------------------------------------------------------------------------
 # Targets
-.PHONY: all $(TARGET) dirs clean img elf help
+.PHONY: all $(TARGET) dirs clean kernel img run help
 
 # Default target: build the program
 all: $(BINS)
@@ -98,7 +100,6 @@ $(TARGET_BIN): $(OBJS)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) $(INCS) -c $< -o $@
 
-
 # Directory target: create the build and object directories
 dirs:
 	@mkdir -p $(BUILD_DIR)
@@ -111,12 +112,16 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 # Create a kernel image
-elf:
+kernel:
 	$(CC) $(CFLAGS) $(INCS) -o $(TARGET_ELF) $(OBJS)
 
 # Create an disk image
 img:
 	./scripts/image.sh $(IMG_FILE) $(TARGET_ELF)
+
+# Run the disk image in QEMU
+run: img
+	$(QEMU) $(QEMU_FLAGS)
 
 # Help target: display usage information
 help:
