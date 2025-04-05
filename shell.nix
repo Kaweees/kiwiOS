@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  # Create a custom nixpkgs with our cross system
+  # OS cross-compilation: our toolchain for x86_64-elf
   x86Pkgs = import <nixpkgs> {
     crossSystem = {
       config = "x86_64-elf";
@@ -10,25 +10,34 @@ let
       useLLVM = false;
     };
   };
+
+  # GRUB cross-compilation: target a 32-bit (i386-pc) environment.
+  grubPkgs = import <nixpkgs> {
+    crossSystem = {
+      config = "i686-linux";
+    };
+  };
 in pkgs.mkShell {
-  # Include development tools
   buildInputs = [
-    # Cross-compilation tools
+    # OS cross-compilation tools
     x86Pkgs.buildPackages.gcc
     x86Pkgs.buildPackages.binutils
     # Basic development tools
-    pkgs.gnumake # Build system
-    pkgs.nasm # For assembly code
-    pkgs.qemu # For testing your OS
-    pkgs.xorriso # For creating bootable ISOs
+    pkgs.gnumake
+    pkgs.nasm
+    pkgs.qemu
+    pkgs.xorriso
+    # GRUB build for i386-pc bootloader
+    grubPkgs.grub2
   ];
 
-  # Set up environment variables to help with cross-compilation
   shellHook = ''
-    # Export the compiler paths explicitly
+    # Add OS cross-compilers to PATH
     export PATH="${x86Pkgs.buildPackages.gcc}/bin:${x86Pkgs.buildPackages.binutils}/bin:$PATH"
     echo "x86 GCC Cross-compiler environment loaded!"
     echo "Compiler version: $(x86_64-elf-gcc --version | head -n 1)"
+    # Set GRUB_DIR to the GRUB installation containing i386-pc modules
+    export GRUB_DIR="${grubPkgs.grub2}/lib/grub"
+    echo "GRUB cross-compilation environment loaded from: $GRUB_DIR"
   '';
 }
-

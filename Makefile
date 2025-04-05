@@ -62,7 +62,7 @@ ASM_SRCS := $(wildcard $(ASM_DIR)/*.S) $(wildcard $(ASM_DIR)/*.s)
 # linker file to link
 LINKER_FILE := $(LINKER_DIR)/linker.ld
 # object files to link
-OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(filter %.c,$(SRCS))) \
+OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(filter %.c,$(C_SRCS))) \
              $(patsubst $(ASM_DIR)/%.S, $(OBJ_DIR)/%.o, $(filter %.S,$(ASM_SRCS))) \
              $(patsubst $(ASM_DIR)/%.s, $(OBJ_DIR)/%.o, $(filter %.s,$(ASM_SRCS)))
 BINS := $(BUILD_DIR)$(TARGET)
@@ -88,7 +88,7 @@ DEBUGGER_FLAGS := -ex "target remote :1234"
 ## Command Section: change these variables based on your commands
 # -----------------------------------------------------------------------------
 # Targets
-.PHONY: all $(TARGET) kernel img dirs clean emulate debug help
+.PHONY: all $(TARGET) kernel img emulate debug dirs clean help
 
 # Default target: build the program
 all: $(BINS)
@@ -100,22 +100,30 @@ $(TARGET): $(BINS)
 $(BINS): dirs kernel img
 
 # Rule to compile source files into object files
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 	$(CC) $(CC_FLAGS) $(INCS) -c $< -o $@
 
-$(OBJ_DIR)/%.o: $(ASM_DIR)/%.s
+$(OBJ_DIR)/%.o: $(ASM_DIR)/%.s | $(OBJ_DIR)
 	$(AS) $(AS_FLAGS) -o $@ $<
 
-$(OBJ_DIR)/%.o: $(ASM_DIR)/%.S
+$(OBJ_DIR)/%.o: $(ASM_DIR)/%.S | $(OBJ_DIR)
 	$(AS) $(AS_FLAGS) -o $@ $<
 
 # Kernel target: link object files into a kernel executable
 kernel: $(OBJS)
 	$(LD) $(LD_FLAGS) -T $(LINKER_FILE) -o $(TARGET_ELF) $(OBJS)
 
-# Image target: create a kernel image
+# Image target: create a disk image from the kernel executable
 img: $(TARGET_ELF)
-	./scripts/image.sh $(IMG_FILE) $(TARGET_ELF)
+	sudo ./scripts/image.sh $(IMG_FILE) $(TARGET_ELF)
+
+# Emulate target: run the disk image in QEMU
+emulate: img
+	$(QEMU) $(QEMU_FLAGS)
+
+# Debug target: debug the program with GDB
+debug:
+	$(DEBUGGER) $(DEBUGGER_FLAGS) $(TARGET_ELF)
 
 # Directory target: create the build and object directories
 dirs:
@@ -128,22 +136,6 @@ clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 	rm -rf $(BUILD_DIR)
 
-# Kernel target: build the kernel image
-kernel:
-	$(CC) $(CFLAGS) $(INCS) -o $(TARGET_ELF) $(OBJS)
-
-# Disk image target: create a disk image
-img:
-	./scripts/image.sh $(IMG_FILE) $(TARGET_ELF)
-
-# Emulate target: run the disk image in QEMU
-emulate: img
-	$(QEMU) $(QEMU_FLAGS)
-
-# Debug target: debug the program with GDB
-debug:
-	$(DEBUGGER) $(DEBUGGER_FLAGS) $(TARGET_ELF)
-
 # Help target: display usage information
 help:
 	@echo "Usage: make <target>"
@@ -155,3 +147,10 @@ help:
 	@echo "  clean            Remove build artifacts and non-essential files"
 	@echo "  debug            Use $(DEBUGGER) to debug $(TARGET)"
 	@echo "  help             Display this help information"
+
+# Ensure directory creation
+$(OBJ_DIR):
+	@mkdir -p $@
+
+$(BUILD_DIR):
+	@mkdir -p $@
