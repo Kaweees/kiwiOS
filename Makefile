@@ -53,12 +53,15 @@ OBJ_DIR := $(TOP_DIR)/obj
 # directory to place build artifacts
 BUILD_DIR := $(TOP_DIR)/target/$(ARCH)/release/
 
+# Define recursive wildcard function
+rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
+
 # header files to preprocess
 INCS := -I$(INC_DIR)
 # source files to compile
-C_SRCS := $(wildcard $(SRC_DIR)/*.c)
+C_SRCS := $(call rwildcard,$(SRC_DIR)/,*.c)
 # assembly files to compile
-ASM_SRCS := $(wildcard $(ASM_DIR)/*.S) $(wildcard $(ASM_DIR)/*.s)
+ASM_SRCS := $(call rwildcard,$(ASM_DIR)/,*.S) $(call rwildcard,$(ASM_DIR)/,*.s)
 # linker file to link
 LINKER_FILE := $(LINKER_DIR)/linker.ld
 # object files to link
@@ -75,13 +78,15 @@ IMG_FILE := $(BINS).img
 # -----------------------------------------------------------------------------
 # The QEMU executable.
 QEMU := qemu-system-$(ARCH)
+# The QEMU port for the debugger.
+QEMU_PORT := 1234
 # The QEMU flags.
-QEMU_FLAGS := -drive format=raw,file=$(IMG_FILE)
+QEMU_FLAGS := -s -gdb tcp::$(QEMU_PORT) -drive format=raw,file=$(IMG_FILE)
 
 ## Debugger Section: change these variables based on your debugger
 # -----------------------------------------------------------------------------
 # The debugger executable.
-DEBUGGER := gdb
+DEBUGGER := $(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-gdb
 # The debugger flags.
 DEBUGGER_FLAGS := -ex "target remote :1234"
 
@@ -97,32 +102,36 @@ all: $(BINS)
 $(TARGET): $(BINS)
 
 # Rule to build the target files
-$(BINS): dirs kernel img
+$(BINS): dirs kernel img emulate
 
 # Rule to compile source files into object files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
+	@mkdir -p $(dir $@)
 	$(CC) $(CC_FLAGS) $(INCS) -c $< -o $@
 
 $(OBJ_DIR)/%.o: $(ASM_DIR)/%.s | $(OBJ_DIR)
+	@mkdir -p $(dir $@)
 	$(AS) $(AS_FLAGS) -o $@ $<
 
 $(OBJ_DIR)/%.o: $(ASM_DIR)/%.S | $(OBJ_DIR)
+	@mkdir -p $(dir $@)
 	$(AS) $(AS_FLAGS) -o $@ $<
 
 # Kernel target: link object files into a kernel executable
-kernel: $(OBJS)
+kernel: dirs $(OBJS)
 	$(LD) $(LD_FLAGS) -T $(LINKER_FILE) -o $(TARGET_ELF) $(OBJS)
 
 # Image target: create a disk image from the kernel executable
-img: $(TARGET_ELF)
-	sudo ./scripts/image.sh $(TARGET_ELF) $(IMG_FILE)
+img: kernel
+	sudo -E ./scripts/image.sh $(TARGET_ELF) $(IMG_FILE) $(ARCH)
+	sudo chown $(USER):$(USER) $(IMG_FILE)
 
 # Emulate target: run the disk image in QEMU
 emulate: img
 	$(QEMU) $(QEMU_FLAGS)
 
 # Debug target: debug the program with GDB
-debug:
+debug: img
 	$(DEBUGGER) $(DEBUGGER_FLAGS) $(TARGET_ELF)
 
 # Directory target: create the build and object directories
@@ -133,8 +142,7 @@ dirs:
 # Clean target: remove build artifacts and non-essential files
 clean:
 	@echo "Cleaning $(TARGET)..."
-	rm -rf $(OBJ_DIR) $(BIN_DIR)
-	rm -rf $(BUILD_DIR)
+	rm -rf $(OBJ_DIR) $(BUILD_DIR)
 
 # Help target: display usage information
 help:
@@ -143,14 +151,11 @@ help:
 	@echo "Targets:"
 	@echo "  all              Build $(TARGET)"
 	@echo "  $(TARGET)        Build $(TARGET)"
-	@echo "  test             Build and test $(TARGET) against a sample input, use $(MEMCHECK) to check for memory leaks, and compare the output to $(REF_EXE)"
-	@echo "  clean            Remove build artifacts and non-essential files"
+	@echo "  kernel           Build $(TARGET) kernel"
+	@echo "  img              Build $(TARGET) and create a disk image"
+	@echo "  emulate          Run the disk image in QEMU"
 	@echo "  debug            Use $(DEBUGGER) to debug $(TARGET)"
+	@echo "  dirs             Create the build artifact directories"
+	@echo "  clean            Remove build artifacts and non-essential files"
 	@echo "  help             Display this help information"
 
-# Ensure directory creation
-$(OBJ_DIR):
-	@mkdir -p $@
-
-$(BUILD_DIR):
-	@mkdir -p $@
