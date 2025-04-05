@@ -24,15 +24,15 @@ TOOLCHAIN_PREFIX := $(TOOLCHAIN_PATH)x86_64-elf
 # The compiler executable.
 CC := $(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-gcc
 # The compiler flags.
-CC_FLAGS := -Wall -Werror -Wpedantic -std=gnu99
+CC_FLAGS := -Wall -Werror -Wpedantic -std=gnu99 -g -O0
 # The assembler executable.
 AS := nasm
 # The assembler flags.
-AS_FLAGS := -felf64
+AS_FLAGS := -felf64 -g
 # The linker executable.
 LD := $(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-ld
 # The linker flags.
-LD_FLAGS := -n
+LD_FLAGS := -n -g
 # The shell executable.
 SHELL := /bin/bash
 
@@ -81,14 +81,17 @@ QEMU := qemu-system-$(ARCH)
 # The QEMU port for the debugger.
 QEMU_PORT := 1234
 # The QEMU flags.
-QEMU_FLAGS := -s -gdb tcp::$(QEMU_PORT) -drive format=raw,file=$(IMG_FILE)
+QEMU_FLAGS := -drive format=raw,file=$(IMG_FILE)
 
 ## Debugger Section: change these variables based on your debugger
 # -----------------------------------------------------------------------------
 # The debugger executable.
 DEBUGGER := $(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-gdb
 # The debugger flags.
-DEBUGGER_FLAGS := -ex "target remote :1234"
+DEBUGGER_FLAGS := -ex "target remote :$(QEMU_PORT)"
+# The debugger init file.
+GLOBAL_DEBUGGER_INIT := $(HOME)/scripts/gdbinit
+LOCAL_DEBUGGER_INIT := $(TOP_DIR)/scripts/.gdbinit
 
 ## Command Section: change these variables based on your commands
 # -----------------------------------------------------------------------------
@@ -102,7 +105,7 @@ all: $(BINS)
 $(TARGET): $(BINS)
 
 # Rule to build the target files
-$(BINS): dirs kernel img emulate
+$(BINS): dirs kernel img
 
 # Rule to compile source files into object files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
@@ -132,17 +135,22 @@ emulate: img
 
 # Debug target: debug the program with GDB
 debug: img
+	$(QEMU) $(QEMU_FLAGS) -gdb tcp::$(QEMU_PORT) -S &
 	$(DEBUGGER) $(DEBUGGER_FLAGS) $(TARGET_ELF)
 
 # Directory target: create the build and object directories
 dirs:
+	@echo "Creating directories..."
 	@mkdir -p $(BUILD_DIR)
 	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(dir $(GLOBAL_DEBUGGER_INIT))
+	@[[ ! -f $(LOCAL_DEBUGGER_INIT) ]] || touch $(GLOBAL_DEBUGGER_INIT) && echo "add-auto-load-safe-path $(LOCAL_DEBUGGER_INIT)" >> $(GLOBAL_DEBUGGER_INIT)
 
 # Clean target: remove build artifacts and non-essential files
 clean:
 	@echo "Cleaning $(TARGET)..."
-	rm -rf $(OBJ_DIR) $(BUILD_DIR)
+	@rm -rf $(OBJ_DIR) $(BUILD_DIR)
+	@rm -rf $(GLOBAL_DEBUGGER_INIT)
 
 # Help target: display usage information
 help:
