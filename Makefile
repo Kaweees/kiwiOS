@@ -1,49 +1,40 @@
 # Makefile for compiling, linking, and building the program.
 # Begin Variables Section
 
-## Program Section: change these variables based on your program
-# The name of the program to build.
-TARGET := kiwios
-
-## Bootloader Section: change these variables based on your bootloader
-# -----------------------------------------------------------------------------
-# The bootloader executable.
-BOOTLOADER := bootloader
-# The bootloader flags.
-BOOTLOADER_FLAGS :=
-
 ## Architecture Section: change these variables based on your architecture
 # -----------------------------------------------------------------------------
 # The architecture to build for.
 ARCH := x86_64
-# The toolchain path
-# TOOLCHAIN_PATH=/usr/bin/
-# The toolchain prefix
-TOOLCHAIN_PREFIX := x86_64-elf
 # The architecture flags.
 ARCH_FLAGS :=
+
+## Program Section: change these variables based on your program
+# -----------------------------------------------------------------------------
+# The name of the program to build.
+TARGET := kiwios-$(ARCH)
+
+# The toolchain path
+# TOOLCHAIN_PATH := /usr/bin/
+TOOLCHAIN_PATH :=
+# The toolchain prefix
+TOOLCHAIN_PREFIX := $(TOOLCHAIN_PATH)x86_64-elf
 
 ## Compiler Section: change these variables based on your compiler
 # -----------------------------------------------------------------------------
 # The compiler executable.
 CC := $(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-gcc
 # The compiler flags.
-CFLAGS := -Wall -Werror -Wpedantic -std=gnu99
+CC_FLAGS := -Wall -Werror -Wpedantic -std=gnu99
+# The assembler executable.
+AS := nasm
+# The assembler flags.
+AS_FLAGS := -felf64
 # The linker executable.
-LD := $(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-gcc
+LD := $(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-ld
 # The linker flags.
-LDFLAGS := -Wall -Werror -Wpedantic -std=gnu99
+LD_FLAGS := -n
 # The shell executable.
 SHELL := /bin/bash
-
-# The name of the test input file
-TEST_INPUT := test_input.txt
-# The name of the test output file
-TEST_OUTPUT := test_output.tar
-# The name of the reference executable
-REF_EXE := ~pn-cs357/demos/mytar
-# The name of the reference output file
-REF_OUTPUT := ref_output.tar
 
 ## Output Section: change these variables based on your output
 # -----------------------------------------------------------------------------
@@ -51,6 +42,10 @@ REF_OUTPUT := ref_output.tar
 TOP_DIR := $(shell pwd)
 # directory to locate source files
 SRC_DIR := $(TOP_DIR)/src
+# directory to locate assembly files
+ASM_DIR := $(SRC_DIR)/arch/$(ARCH)
+# directory to locate linker file
+LINKER_DIR := $(ASM_DIR)
 # directory to locate header files
 INC_DIR := $(TOP_DIR)/include
 # directory to locate object files
@@ -61,10 +56,15 @@ BUILD_DIR := $(TOP_DIR)/target/$(ARCH)/release/
 # header files to preprocess
 INCS := -I$(INC_DIR)
 # source files to compile
-SRCS := $(wildcard $(SRC_DIR)/*.c)
+C_SRCS := $(wildcard $(SRC_DIR)/*.c)
+# assembly files to compile
+ASM_SRCS := $(wildcard $(ASM_DIR)/*.S) $(wildcard $(ASM_DIR)/*.s)
+# linker file to link
+LINKER_FILE := $(LINKER_DIR)/linker.ld
 # object files to link
-OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
-#
+OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(filter %.c,$(SRCS))) \
+             $(patsubst $(ASM_DIR)/%.S, $(OBJ_DIR)/%.o, $(filter %.S,$(ASM_SRCS))) \
+             $(patsubst $(ASM_DIR)/%.s, $(OBJ_DIR)/%.o, $(filter %.s,$(ASM_SRCS)))
 BINS := $(BUILD_DIR)$(TARGET)
 #
 TARGET_ELF := $(BINS).elf
@@ -78,10 +78,17 @@ QEMU := qemu-system-$(ARCH)
 # The QEMU flags.
 QEMU_FLAGS := -drive format=raw,file=$(IMG_FILE)
 
+## Debugger Section: change these variables based on your debugger
+# -----------------------------------------------------------------------------
+# The debugger executable.
+DEBUGGER := gdb
+# The debugger flags.
+DEBUGGER_FLAGS := -ex "target remote :1234"
+
 ## Command Section: change these variables based on your commands
 # -----------------------------------------------------------------------------
 # Targets
-.PHONY: all $(TARGET) dirs clean kernel img run help
+.PHONY: all $(TARGET) kernel img dirs clean emulate debug help
 
 # Default target: build the program
 all: $(BINS)
@@ -90,15 +97,25 @@ all: $(BINS)
 $(TARGET): $(BINS)
 
 # Rule to build the target files
-$(BINS): dirs $(TARGET_BIN)
-
-# Rule to build the binary file from linked object files
-$(TARGET_BIN): $(OBJS)
-	$(LD) $(LDFLAGS) $(OBJS) -o $(TARGET_BIN)
+$(BINS): dirs kernel img
 
 # Rule to compile source files into object files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) $(INCS) -c $< -o $@
+	$(CC) $(CC_FLAGS) $(INCS) -c $< -o $@
+
+$(OBJ_DIR)/%.o: $(ASM_DIR)/%.s
+	$(AS) $(AS_FLAGS) -o $@ $<
+
+$(OBJ_DIR)/%.o: $(ASM_DIR)/%.S
+	$(AS) $(AS_FLAGS) -o $@ $<
+
+# Kernel target: link object files into a kernel executable
+kernel: $(OBJS)
+	$(LD) $(LD_FLAGS) -T $(LINKER_FILE) -o $(TARGET_ELF) $(OBJS)
+
+# Image target: create a kernel image
+img: $(TARGET_ELF)
+	./scripts/image.sh $(IMG_FILE) $(TARGET_ELF)
 
 # Directory target: create the build and object directories
 dirs:
@@ -111,17 +128,21 @@ clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 	rm -rf $(BUILD_DIR)
 
-# Create a kernel image
+# Kernel target: build the kernel image
 kernel:
 	$(CC) $(CFLAGS) $(INCS) -o $(TARGET_ELF) $(OBJS)
 
-# Create an disk image
+# Disk image target: create a disk image
 img:
 	./scripts/image.sh $(IMG_FILE) $(TARGET_ELF)
 
-# Run the disk image in QEMU
-run: img
+# Emulate target: run the disk image in QEMU
+emulate: img
 	$(QEMU) $(QEMU_FLAGS)
+
+# Debug target: debug the program with GDB
+debug:
+	$(DEBUGGER) $(DEBUGGER_FLAGS) $(TARGET_ELF)
 
 # Help target: display usage information
 help:
