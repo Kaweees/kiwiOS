@@ -37,7 +37,7 @@ in pkgs.mkShell {
     echo "x86 GCC Cross-compiler environment loaded!"
     echo "Compiler version: $(x86_64-elf-gcc --version | head -n 1)"
     # Set GRUB_DIR to the GRUB installation containing i386-pc modules
-    export GRUB_DIR="${grubPkgs.grub2}/lib/grub"
-    echo "GRUB cross-compilation environment loaded from: $GRUB_DIR"
+    # export GRUB_DIR="${grubPkgs.grub2}/lib/grub"
+    # echo "GRUB cross-compilation environment loaded from: $GRUB_DIR"
   '';
 }

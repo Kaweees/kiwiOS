@@ -69,7 +69,7 @@ BINS := $(BUILD_DIR)$(TARGET)
 #
 TARGET_ELF := $(BINS).elf
 #
-IMG_FILE := $(BUILD_DIR)$(TARGET).img
+IMG_FILE := $(BINS).img
 
 ## QEMU Section: change these variables based on your QEMU
 # -----------------------------------------------------------------------------
@@ -115,7 +115,7 @@ kernel: $(OBJS)
 
 # Image target: create a disk image from the kernel executable
 img: $(TARGET_ELF)
-	sudo ./scripts/image.sh $(IMG_FILE) $(TARGET_ELF)
+	sudo ./scripts/image.sh $(TARGET_ELF) $(IMG_FILE)
 
 # Emulate target: run the disk image in QEMU
 emulate: img
