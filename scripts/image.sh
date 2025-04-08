@@ -21,7 +21,7 @@ image() {
   mkdir -p "${boot_files_dir}"
   sudo mkdir -p "${boot_files_dir}/boot/grub"
   sudo cp -r ./src/arch/${kernel_arch}/grub.cfg "${boot_files_dir}/boot/grub/"
-  sudo cp -r "${kernel_file}" "${boot_files_dir}/boot/kiwios.elf"
+  sudo cp -r "${kernel_file}" "${boot_files_dir}/boot/kiwios.bin"
   # Create a zeroed out disk image file
   dd if=/dev/zero of="${image_file}" bs=512 count=32768
   # Add a Master Boot Record (MBR) to the image

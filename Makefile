@@ -61,16 +61,17 @@ INCS := -I$(INC_DIR)
 # source files to compile
 C_SRCS := $(call rwildcard,$(SRC_DIR)/,*.c)
 # assembly files to compile
-ASM_SRCS := $(call rwildcard,$(ASM_DIR)/,*.S) $(call rwildcard,$(ASM_DIR)/,*.s)
+ASM_SRCS := $(call rwildcard,$(ASM_DIR)/,*.S) $(call rwildcard,$(ASM_DIR)/,*.s) $(call rwildcard,$(ASM_DIR)/,*.asm)
 # linker file to link
 LINKER_FILE := $(LINKER_DIR)/linker.ld
 # object files to link
 OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(filter %.c,$(C_SRCS))) \
              $(patsubst $(ASM_DIR)/%.S, $(OBJ_DIR)/%.o, $(filter %.S,$(ASM_SRCS))) \
-             $(patsubst $(ASM_DIR)/%.s, $(OBJ_DIR)/%.o, $(filter %.s,$(ASM_SRCS)))
+             $(patsubst $(ASM_DIR)/%.s, $(OBJ_DIR)/%.o, $(filter %.s,$(ASM_SRCS))) \
+             $(patsubst $(ASM_DIR)/%.asm, $(OBJ_DIR)/%.o, $(filter %.asm,$(ASM_SRCS)))
 BINS := $(BUILD_DIR)$(TARGET)
 #
-TARGET_ELF := $(BINS).elf
+TARGET_BIN := $(BINS).bin
 #
 IMG_FILE := $(BINS).img
 
@@ -90,8 +91,7 @@ DEBUGGER := $(TOOLCHAIN_PATH)$(TOOLCHAIN_PREFIX)-gdb
 # The debugger flags.
 DEBUGGER_FLAGS := -ex "target remote :$(QEMU_PORT)"
 # The debugger init file.
-GLOBAL_DEBUGGER_INIT := $(HOME)/scripts/gdbinit
-LOCAL_DEBUGGER_INIT := $(TOP_DIR)/scripts/.gdbinit
+DEBUGGER_INIT := $(TOP_DIR)/scripts/.gdbinit
 
 ## Command Section: change these variables based on your commands
 # -----------------------------------------------------------------------------
@@ -122,11 +122,11 @@ $(OBJ_DIR)/%.o: $(ASM_DIR)/%.S | $(OBJ_DIR)
 
 # Kernel target: link object files into a kernel executable
 kernel: dirs $(OBJS)
-	$(LD) $(LD_FLAGS) -T $(LINKER_FILE) -o $(TARGET_ELF) $(OBJS)
+	$(LD) $(LD_FLAGS) -T $(LINKER_FILE) -o $(TARGET_BIN) $(OBJS)
 
 # Image target: create a disk image from the kernel executable
 img: kernel
-	sudo -E ./scripts/image.sh $(TARGET_ELF) $(IMG_FILE) $(ARCH)
+	sudo -E ./scripts/image.sh $(TARGET_BIN) $(IMG_FILE) $(ARCH)
 	sudo chown $(USER):$(USER) $(IMG_FILE)
 
 # Emulate target: run the disk image in QEMU
@@ -136,21 +136,18 @@ emulate: img
 # Debug target: debug the program with GDB
 debug: img
 	$(QEMU) $(QEMU_FLAGS) -gdb tcp::$(QEMU_PORT) -S &
-	$(DEBUGGER) $(DEBUGGER_FLAGS) $(TARGET_ELF)
+	$(DEBUGGER) $(DEBUGGER_FLAGS) $(TARGET_BIN) -x $(DEBUGGER_INIT)
 
 # Directory target: create the build and object directories
 dirs:
 	@echo "Creating directories..."
 	@mkdir -p $(BUILD_DIR)
 	@mkdir -p $(OBJ_DIR)
-	@mkdir -p $(dir $(GLOBAL_DEBUGGER_INIT))
-	@[[ ! -f $(LOCAL_DEBUGGER_INIT) ]] || touch $(GLOBAL_DEBUGGER_INIT) && echo "add-auto-load-safe-path $(LOCAL_DEBUGGER_INIT)" >> $(GLOBAL_DEBUGGER_INIT)
 
 # Clean target: remove build artifacts and non-essential files
 clean:
 	@echo "Cleaning $(TARGET)..."
 	@rm -rf $(OBJ_DIR) $(BUILD_DIR)
-	@rm -rf $(GLOBAL_DEBUGGER_INIT)
 
 # Help target: display usage information
 help:

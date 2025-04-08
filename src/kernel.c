@@ -1,4 +1,4 @@
-void kernel_main(void) {
+void kmain(void) {
   /* Initialize terminal interface */
   // terminal_initialize();
 

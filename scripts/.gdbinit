@@ -1,3 +1,6 @@
+set arch i386:x86-64:intel
+symbol-file target/x86_64/release/kiwios-x86_64.bin
+
 # # Enable pretty printing of C++ STL containers
 # python
 # import sys
